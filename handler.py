@@ -74,7 +74,7 @@ def _load_pipeline():
     from diffusers import FluxPipeline
 
     model_id = BASE_MODEL
-    kwargs = {"torch_dtype": torch.bfloat16}
+    kwargs = {"torch_dtype": torch.bfloat16, "low_cpu_mem_usage": True}
     if HF_TOKEN:
         kwargs["token"] = HF_TOKEN
 
@@ -82,11 +82,12 @@ def _load_pipeline():
         pipe = FluxPipeline.from_pretrained(model_id, **kwargs)
     except Exception as exc:  # gated/нет токена → зеркало
         print(f"[init] primary base {model_id} failed: {exc}; trying fallback {BASE_MODEL_FALLBACK}")
-        pipe = FluxPipeline.from_pretrained(BASE_MODEL_FALLBACK, torch_dtype=torch.bfloat16)
+        pipe = FluxPipeline.from_pretrained(BASE_MODEL_FALLBACK, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
 
     # 24GB GPU: cpu offload экономит VRAM при загрузке LoRA. Чуть медленнее, но
     # надёжно влезает в L4/4090/A5000.
-    pipe.enable_model_cpu_offload()
+    # sequential offload: lowest peak VRAM, reliably fits 24GB (model offload OOM'd на 24GB)
+    pipe.enable_sequential_cpu_offload()
     PIPE = pipe
     print(f"[init] pipeline ready: {model_id} (cpu_offload)")
     return PIPE
